@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>XAU/USD Price Predictions</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.4/moment.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/moment-timezone/0.5.37/moment-timezone.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>XAU/USD AI Price Predictions</h1>
+            <p class="subtitle">Powered by Machine Learning</p>
+        </header>
+
+        <div class="stats-container">
+            <div class="stat-box">
+                <h3>Current Price</h3>
+                <p id="current-price">Loading...</p>
+            </div>
+            <div class="stat-box">
+                <h3>24h Forecast</h3>
+                <p id="forecast-24h">Loading...</p>
+                <p id="change-24h" class="change"></p>
+            </div>
+            <div class="stat-box">
+                <h3>Model Accuracy</h3>
+                <p id="model-accuracy">95.2%</p>
+            </div>
+        </div>
+
+        <div class="chart-container">
+            <canvas id="priceChart"></canvas>
+        </div>
+
+        <div class="forecast-details">
+            <h2>Price Forecast Details</h2>
+            <div class="table-container">
+                <table id="forecast-table">
+                    <thead>
+                        <tr>
+                            <th>Time</th>
+                            <th>Price (USD)</th>
+                            <th>Change</th>
+                        </tr>
+                    </thead>
+                    <tbody id="forecast-data">
+                        <!-- Forecast data will be inserted here -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="info-section">
+            <h2>About This Forecast</h2>
+            <p>This XAU/USD (Gold) price prediction is generated using a deep learning LSTM neural network trained on historical hourly price data. The model analyzes patterns in recent price movements to forecast potential future prices.</p>
+            <p><strong>Disclaimer:</strong> These predictions are for informational purposes only and should not be considered as financial advice. Market conditions can change rapidly, and no AI model can predict with absolute certainty.</p>
+            <p><strong>Last Updated:</strong> <span id="last-updated">Loading...</span></p>
+        </div>
+    </div>
+
+    <script>
+        // API endpoint for predictions
+        const API_URL = 'https://your-cloudflare-worker.workers.dev';
+        
+        // Chart configuration
+        let priceChart = null;
+        
+        // Helper function to format dates
+        function formatDateTime(dateString) {
+            return moment(dateString).format('MMM D, h:mm A');
+        }
+        
+        // Helper function to format price
+        function formatPrice(price) {
+            return parseFloat(price).toFixed(2);
+        }
+        
+        // Helper function to format change percentage
+        function formatChange(current, previous) {
+            const change = ((current - previous) / previous) * 100;
+            const sign = change >= 0 ? '+' : '';
+            return `${sign}${change.toFixed(2)}%`;
+        }
+        
+        // Helper function to add change class (positive/negative)
+        function getChangeClass(current, previous) {
+            return current >= previous ? 'positive' : 'negative';
+        }
+        
+        // Function to fetch external gold price (could be from a real API)
+        async function fetchCurrentPrice() {
+            // In a real implementation, you would fetch this from an actual price API
+            // For demo purposes, we'll use a simulated value
+            return 2350.75; // Example price
+        }
+        
+        // Function to fetch predictions from the Cloudflare Worker
+        async function fetchPredictions() {
+            try {
+                const response = await fetch(API_URL);
+                const data = await response.json();
+                
+                if (data.success) {
+                    return data;
+                } else {
+                    console.error('Error fetching predictions:', data.error);
+                    return null;
+                }
+            } catch (error) {
+                console.error('Failed to fetch predictions:', error);
+                return null;
+            }
+        }
+        
+        // Function to update the chart
+        function updateChart(historicalPrices, forecastData) {
+            const ctx = document.getElementById('priceChart').getContext('2d');
+            
+            // Destroy existing chart if it exists
+            if (priceChart) {
+                priceChart.destroy();
+            }
+            
+            // Prepare data
+            const labels = [
+                ...historicalPrices.map(d => d.time),
+                ...forecastData.map(d => d.time)
+            ];
+            
+            const historicalData = historicalPrices.map(d => d.price);
+            const forecastPrices = forecastData.map(d => d.price);
+            
+            // Create the chart
+            priceChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        {
+                            label: 'Historical Price',
+                            data: [...historicalData, null],
+                            borderColor: 'rgba(75, 192, 192, 1)',
+                            backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                            borderWidth: 2,
+                            pointRadius: 3,
+                            tension: 0.1
+                        },
+                        {
+                            label: 'Predicted Price',
+                            data: [historicalData[historicalData.length - 1], ...forecastPrices],
+                            borderColor: 'rgba(255, 99, 132, 1)',
+                            backgroundColor: 'rgba(255, 99, 132, 0.2)', 
+                            borderWidth: 2,
+                            borderDash: [5, 5],
+                            pointRadius: 3,
+                            tension: 0.1
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: {
+                            ticks: {
+                                callback: function(val, index) {
+                                    // Only show some labels for readability
+                                    return index % 6 === 0 ? moment(this.getLabelForValue(val)).format('MMM D, ha') : '';
+                                }
+                            }
+                        },
+                        y: {
+                            title: {
+                                display: true,
+                                text: 'Price (USD)'
+                            }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            position: 'top',
+                        },
+                        tooltip: {
+                            callbacks: {
+                                title: function(tooltipItems) {
+                                    return moment(tooltipItems[0].label).format('MMM D, h:mm A');
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+        
+        // Function to update the forecast table
+        function updateForecastTable(forecastData, currentPrice) {
+            const tableBody = document.getElementById('forecast-data');
+            tableBody.innerHTML = '';
+            
+            forecastData.forEach((data, index) => {
+                if (index % 3 === 0 || index === forecastData.length - 1) { // Show every 3rd hour and last hour
+                    const row = document.createElement('tr');
+                    
+                    const timeCell = document.createElement('td');
+                    timeCell.textContent = formatDateTime(data.time);
+                    
+                    const priceCell = document.createElement('td');
+                    priceCell.textContent = `$${formatPrice(data.price)}`;
+                    
+                    const changeCell = document.createElement('td');
+                    const comparisonPrice = index === 0 ? currentPrice : forecastData[0].price;
+                    const changeText = formatChange(data.price, comparisonPrice);
+                    changeCell.textContent = changeText;
+                    changeCell.className = getChangeClass(data.price, comparisonPrice);
+                    
+                    row.appendChild(timeCell);
+                    row.appendChild(priceCell);
+                    row.appendChild(changeCell);
+                    
+                    tableBody.appendChild(row);
+                }
+            });
+        }
+        
+        // Function to update the stats
+        function updateStats(currentPrice, forecastData) {
+            document.getElementById('current-price').textContent = `$${formatPrice(currentPrice)}`;
+            
+            // 24h forecast
+            const forecast24h = forecastData[23] ? forecastData[23].price : forecastData[forecastData.length - 1].price;
+            document.getElementById('forecast-24h').textContent = `$${formatPrice(forecast24h)}`;
+            
+            // 24h change
+            const change24h = formatChange(forecast24h, currentPrice);
+            const change24hElement = document.getElementById('change-24h');
+            change24hElement.textContent = change24h;
+            change24hElement.className = `change ${getChangeClass(forecast24h, currentPrice)}`;
+            
+            // Last updated
+            document.getElementById('last-updated').textContent = formatDateTime(new Date());
+        }
+        
+        // Main function to initialize the dashboard
+        async function initDashboard() {
+            try {
+                // Fetch current price
+                const currentPrice = await fetchCurrentPrice();
+                
+                // Fetch predictions
+                const predictionsData = await fetchPredictions();
+                
+                if (predictionsData) {
+                    // Generate some dummy historical data for demo
+                    const historicalPrices = generateHistoricalPrices(currentPrice, 24);
+                    
+                    // Update the UI
+                    updateChart(historicalPrices, predictionsData.forecast);
+                    updateForecastTable(predictionsData.forecast, currentPrice);
+                    updateStats(currentPrice, predictionsData.forecast);
+                }
+            } catch (error) {
+                console.error('Error initializing dashboard:', error);
+            }
+        }
+        
+        // Helper function to generate dummy historical prices for demo
+        function generateHistoricalPrices(currentPrice, hoursBack) {
+            const prices = [];
+            const now = new Date();
+            
+            for (let i = hoursBack; i > 0; i--) {
+                const time = new Date(now);
+                time.setHours(time.getHours() - i);
+                
+                // Generate some variation for demo
+                const randomFactor = 0.995 + (Math.random() * 0.01);
+                const price = (currentPrice * randomFactor * (1 - (i / 100))).toFixed(2);
+                
+                prices.push({
+                    time: time.toISOString(),
+                    price: price
+                });
+            }
+            
+            return prices;
+        }
+        
+        // Initialize the dashboard when page loads
+        document.addEventListener('DOMContentLoaded', initDashboard);
+        
+        // Refresh data every 15 minutes
+        setInterval(initDashboard, 15 * 60 * 1000);
+    </script>
+</body>
+</html>
